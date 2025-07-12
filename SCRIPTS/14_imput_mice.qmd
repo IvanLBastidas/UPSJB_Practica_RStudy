@@ -1,6 +1,5 @@
 ---
 title: "Imputación de datos usando el paquete MICE"
-author: "Kevin J. Paez"
 format: html
 ---
 
