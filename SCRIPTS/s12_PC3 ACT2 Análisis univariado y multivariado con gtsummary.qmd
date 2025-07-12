@@ -1,0 +1,354 @@
+---
+title: "Análisis univariado y multivariado con gtsummary"
+author: "Grupo 01"
+format: html
+---
+
+GRUPO 01 - Integrantes
+
+-   Bastidas Bendezu Ivan Luis
+
+-   Basurto Taype Marcelo Aaron
+
+-   Fonseca Moron José Kenneth
+
+-   Saravia Gutierrez Randy Esteban
+
+-   Talavera Ayllon Angel Ronaldo
+
+## Cargar los paquetes
+
+```{r}
+install.packages("performance")
+```
+
+```{r}
+library(tidyverse)
+library(here)
+library(rio)
+library(gtsummary)
+library(car)
+library(survival)
+library(performance)
+```
+
+## 1 Modelos univariados (no ajustados) vs. multivariados (ajustados)
+
+Hasta ahora, hemos explorado modelos de regresión que evalúan un predictor a la vez. A estos se les denomina modelos univariados o no ajustados, ya que solo consideran una variable predictora. Sin embargo, datasets utilizados en estas sesiones, al igual que muchos datos que probablemente recolectes, provienen de estudios observacionales. Es decir, no existe un control estricto sobre qué individuos se incluyen en el análisis y cuáles no. Esto implica que múltiples factores pueden influir en el desenlace de interés de manera simultánea.
+
+Por esta razón, no es adecuado extraer conclusiones definitivas a partir de modelos no ajustados, ya que estos ignoran el efecto de posibles variables de confusión. En su lugar, es necesario realizar un análisis multivariado o ajustado, que permita considerar de manera simultánea varios predictores potenciales.
+
+Por ejemplo, es poco probable que solo el tipo de accidente cerebrovascular (ACV) —isquémico o hemorrágico— determine la probabilidad de fallecer tras un evento de este tipo. Factores como la edad, el sexo, las comorbilidades preexistentes y los hábitos de vida también pueden afectar de manera importante este riesgo. Ignorar estas variables podría conducir a estimaciones sesgadas o erróneas.
+
+## 1.1 Interpretación general del modelo ajustado
+
+Cuando se incluyen varias covariables en un modelo de regresión, se obtienen medidas de efecto ajustadas, como el Odds Ratio ajustado (OR ajustado) en la regresión logística, o el riesgo relativo ajustado (RR ajustado) en la regresión de Cox. Estas medidas estiman la asociación entre una variable específica y el desenlace de interés, mientras se controla el efecto de las demás covariables incluidas en el modelo.
+
+Por ejemplo, el OR ajustado para fallecer tras un ACV isquémico indica la fuerza de esta asociación independientemente de otros factores como la edad, el sexo o las comorbilidades del paciente.
+
+En esta sesión aplicaremos tanto modelos univariados (no ajustados) como multivariados (ajustados), utilizando el dataset previamente analizados en sesión de regresión logística.
+
+## 1.2 Selección de variables para el modelo multivariado (ajustado)
+
+La selección de variables consiste en decidir cuáles variables incluir en un modelo a partir de una lista completa de predictores disponibles, eliminando aquellas que son irrelevantes o redundantes. El objetivo es construir un modelo que explique adecuadamente el desenlace y permita realizar predicciones precisas sin sobreajustar los datos.
+
+Existen al menos dos enfoques principales para la selección de variables:
+
+### **1.2.1 Selección automática**
+
+Este método emplea algoritmos automáticos —disponibles en R— para determinar qué variables incluir en el modelo. Las técnicas automáticas de selección se basan en criterios estadísticos como los valores p o los coeficientes de regresión. Los algoritmos difieren principalmente en la estrategia que utilizan para evaluar la inclusión o exclusión de variables en el modelo final.
+
+Dependiendo de la dirección del algoritmo (forward, backward o stepwise), el resultado será un subconjunto seleccionado de variables. Para comparar entre distintos modelos generados por estos algoritmos, puede utilizarse el Criterio de Información de Akaike (Akaike Information Criterion, AIC), que estima el error de predicción y, por tanto, la calidad relativa de los modelos estadísticos para un conjunto de datos dado. En términos simples, cuanto menor sea el valor del AIC, mejor es el modelo en términos de equilibrio entre ajuste y complejidad.
+
+Hay al menos tres algoritmos de selección automática de variables:
+
+1.  Eliminación hacia atrás (*Backward elimination*),
+
+2.  Selección hacia adelante (*Forward selection*) y
+
+3.  Selección paso a paso (*Stepwise selection*).
+
+Cada uno de estos métodos tiene ventajas y limitaciones. Entre ellos, la selección paso a paso es una técnica ampliamente utilizada en investigaciones en ciencias de la salud, ya que combina procedimientos de selección hacia adelante y hacia atrás. Esto permite añadir o eliminar variables de manera iterativa en función de criterios estadísticos, optimizando el modelo en ambos sentidos.
+
+Sin embargo, la selección automática de variables no debería realizarse de manera aislada; es recomendable complementarla con una evaluación de la multicolinealidad. La multicolinealidad ocurre cuando dos o más variables independientes están altamente correlacionadas, lo que puede distorsionar las estimaciones del modelo. Por ejemplo, no es apropiado incluir simultáneamente el recuento total de leucocitos y el recuento de neutrófilos, dado que ambas variables están estrechamente relacionadas; en estos casos, es preferible seleccionar solo una de ellas.
+
+En regresión, una herramienta común para detectar multicolinealidad es el Factor de Inflación de la Varianza (VIF, por sus siglas en inglés). De manera general, se interpreta así:
+
+-   VIF de 1 indica que no hay multicolinealidad.
+-   VIF entre 1 y 5 sugiere una multicolinealidad moderada.
+-   VIF superior a 5 o 10 indica una multicolinealidad alta que puede requerir atención.
+
+### **1.2.2 Selección intencionada de variables**
+
+La selección intencionada de variables sigue una serie de pasos que combinan criterios estadísticos y consideraciones clínicas. Estos pasos incluyen:
+
+-   Evaluación univariada de variables: Se realiza un análisis univariado para cada variable independiente con respecto a la variable de desenlace. Las variables que presentan una asociación estadísticamente significativa (habitualmente con un valor de p menor a 0.20) o que son consideradas clínicamente relevantes se seleccionan para su inclusión inicial en el modelo multivariado, independientemente de su significancia estadística.
+
+-   Comparación de modelos multivariados: Las variables seleccionadas se incluyen en un modelo multivariado preliminar. A partir de este modelo, las variables que no alcanzan un nivel de significancia estadística estricto (por ejemplo, p \> 0.05) pueden ser consideradas para eliminación. Posteriormente, se comparan el modelo original (con todas las variables) y el modelo reducido (con las variables eliminadas) para evaluar si la simplificación del modelo afecta negativamente su capacidad explicativa o predictiva. Esta comparación puede realizarse mediante pruebas como la de razón de verosimilitud (Likelihood Ratio Test) o criterios de información (AIC/BIC).
+
+-   Evaluación de interacciones: Es importante explorar posibles términos de interacción entre variables que, en combinación, podrían modificar el efecto sobre el desenlace.
+
+## 2. Ejemplos de análisis univariado y multivariado en una regresión logística
+
+### 2.1 El dataset para este ejercicio
+
+Para ejemplificar el procedimiento de análisis multivariado mediante un modelo de regresión logística, se utilizará la información proveniente del estudio presentado en "Almac Sangre". Este estudio recopila datos de diversos pacientes, incluyendo variables como recurrencia, estado del tiempo (censor o no censurado), resultado de BN positivo, edad, estadio tumoral, Gleason, terapia previa, y otros factores clínicos y demográficos, que permiten analizar la asociación de distintas características con los eventos de interés.
+
+Cargando los datos
+
+```{r}
+almac_sangre <- import(here("data", "almac_sangre.csv"))
+```
+
+Un vistazo a los datos
+
+```{r}
+head(almac_sangre)
+```
+
+### 2.2 El análisis univariado
+
+En esta sección se estimarán los Odds Ratios (OR) de cada variable de manera independiente, es decir, sin ajuste por otras covariables.
+
+Antes de realizar este análisis, es necesario definir las categorías de referencia para las variables categóricas mediante la función `mutate()` en combinación con `relevel()`. Este paso asegura que la interpretación de los OR se haga en relación con la categoría de referencia seleccionada. El resultado se guarda en un nuevo objeto llamado `almac_sangre_1`.
+
+```{r}
+almac_sangre_1 <- almac_sangre |> 
+  mutate(Terapia_previa = relevel(as.factor(Terapia_previa), ref = "No"),
+         Raza_afroamericana = relevel(as.factor(Raza_afroamericana), ref = "Sí"),
+         Terapia_adyuvante = relevel(as.factor(Terapia_adyuvante), ref = "No")) |> 
+  na.omit()
+```
+
+Para obtener la tabla con los resultados del análisis univariado, se utiliza la función `tbl_uvregression()`, que permite generar tablas con las estimaciones de regresión logística para cada variable incluida. Entre sus argumentos se especifican el método de regresión, las variables a analizar, la familia de distribución (binomial para modelos logísticos), y opciones de presentación de los resultados como los intervalos de confianza, valores p y formato de los estimadores.
+
+```{r}
+tabla_reg_log_univ <- almac_sangre_1 |>
+  tbl_uvregression(
+    include = c(Unidades_transfundidas, Raza_afroamericana, Terapia_previa, Edad, Edad_mediana_GR,
+                Volumen_prostata, PSA_preoperatorio),
+    y = Terapia_adyuvante,
+    method = glm,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    conf.int = TRUE,
+    hide_n = TRUE,
+    add_estimate_to_reference_rows = FALSE,
+    pvalue_fun = ~ style_pvalue(.x, digits = 3),
+    estimate_fun = ~ style_number(.x, digits = 2),
+    label = list(
+      Unidades_transfundidas ~ "Unidad transfundida",
+      Raza_afroamericana ~ "Raza afroamericana",
+      Terapia_previa ~ "Terapia previa",
+      Edad ~ "Edad",
+      Edad_mediana_GR ~ "Edad mediana GR",
+      Volumen_prostata ~ "Volumen prostata",
+      PSA_preoperatorio ~ "PSA preoperatorio"
+    )
+  ) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(estimate = "**OR no ajustado**", p.value = "**Valor P**")
+```
+
+En esta tabla, los resultados se expresan como odds ratios no ajustados (OR) con sus respectivos intervalos de confianza al 95% y valores p.
+
+```{r}
+tabla_reg_log_univ
+```
+
+**¿Cómo interpretar?**
+
+1.  Unidad transfundida: OR de 0.68 (IC 0.23 a 1.20, p=0.387). Esto sugiere que la transfusión no está significativamente asociada con el evento, ya que el valor p es mayor a 0.05 y el IC incluye 1.
+
+2.  Raza afroamericana: comparación entre "Sí" y "No" (referencia). La OR de 1.24 (IC 0.21 a 23.73, p=0.843) indica que no hay una asociación significativa y que la estimación es muy imprecisa (amplio intervalo de confianza).
+
+3.  Terapia previa: OR de 9.98 (IC 2.11 a 52.55, p=0.003). Aquí existe una asociación estadísticamente significativa, sugiriendo que los pacientes con terapia previa tienen casi 10 veces más probabilidad de presentar el evento en comparación con los que no tuvieron terapia previa.
+
+4.  Edad: OR de 0.96 (IC 0.87 a 1.07, p=0.447), no significativa, indicando que la edad por sí sola no se asocia de manera significativa con el evento.
+
+5.  Edad mediana de grava renal (GR): OR de 1.07 (IC 0.95 a 1.21, p=0.290), no significativa.
+
+6.  Volumen de próstata: OR de 0.96 (IC 0.89 a 1.00, p=0.137), no significativa
+
+7.  PSA preoperatorio: OR de 1.09 (IC 1.00 a 1.17, p=0.019), significativa, sugiriendo que a mayor nivel de PSA antes de la cirugía, mayor es la probabilidad del evento.
+
+En resumen, los únicos factores con asociación estadísticamente significativa en este análisis no ajustado son la terapia previa y el PSA preoperatorio, indicando que estos dos variables podrían influir en el evento estudiado en la población analizada.
+
+### 2.3 El análisis multivariado
+
+Para el análisis de regresión logística multivariada, se aplicó una estrategia de selección automática de variables utilizando tres enfoques: eliminación hacia atrás (*backward elimination*), selección hacia adelante (*forward selection*) y selección paso a paso (*stepwise selection)*.
+
+**Paso 1. Ajuste del modelo inicial**
+
+Ajustamos un modelo de regresión logística binaria que incluya todas las variables candidatas
+
+```{r}
+var_modelo = glm(
+  Terapia_adyuvante ~ Unidades_transfundidas + Raza_afroamericana + Terapia_previa + Edad + Edad_mediana_GR + 
+    Volumen_prostata + PSA_preoperatorio,
+  data = almac_sangre_1,
+  family = binomial(link = "logit")
+  )
+```
+
+**Paso 2a. Realizamos la selección de variables** usando la técnica Eliminación hacia atrás (Backward elimination).
+
+```{r}
+multi_backward <- var_modelo |>
+  step(direction = "backward", trace = FALSE)
+```
+
+**Paso 2b. Realizamos la selección de variables** usando la técnica Selección hacia adelante (Forward selection).
+
+```{r}
+multi_forward <- var_modelo |>
+  step(direction = "forward", trace = FALSE)
+```
+
+**Paso 3c. Realizamos la selección de variables** usando la técnica Selección paso a paso (Stepwise selection).
+
+```{r}
+multi_stepwise <- var_modelo |>
+  step(direction = "both", trace = FALSE)
+```
+
+Los resultados de la selección de las variables para el modelo se han guardado en los objetos: multi_backward, multi_forward, y multi_stepwise. El siguiente paso es comparar los valores de AIC y la multicolinealidad entre las variables seleccionadas por cada uno de los modelos.
+
+**Paso 3. Estimados el AIC para los modelos.**
+
+Podemos visualizar el AIC y cuáles variables han sido seleccionadas en cada modelo, usando la función summary.
+
+```{r}
+summary(multi_backward)
+```
+
+```{r}
+summary(multi_forward)
+```
+
+```{r}
+summary(multi_stepwise)
+```
+
+### **2.4 Conclusión**
+
+Los modelos obtenidos mediante eliminación hacia atrás (backward elimination) y selección paso a paso (stepwise selection) presentaron el menor valor de AIC (313.455), indicando un mejor ajuste en comparación con el modelo generado mediante selección hacia adelante (forward selection). Además, ambos modelos seleccionaron el mismo conjunto de variables. Por el contrario, la técnica de selección hacia adelante mantuvo todas las variables originales, lo que resultó en un modelo más complejo sin mejorar el AIC.
+
+### 2.5 Evaluación de colinealidad
+
+Finalmente, evaluamos la colinealidad usando la función `check_collinearity()` del paquete `performance`.
+
+```{r}
+performance::check_collinearity(multi_backward, ci = NULL)
+```
+
+```{r}
+performance::check_collinearity(multi_forward, ci = NULL)
+```
+
+```{r}
+performance::check_collinearity(multi_stepwise, ci = NULL)
+```
+
+### **2.6 Conclusión**
+
+Las tres metodologías de análisis (multi_backward, multi_forward, y stepwise) convergieron en modelos similares, destacando que la variable "Terapia_previa" es estadísticamente significativa en la predicción de la terapia adyuvante, con un valor p menor a 0.05, indicando que la presencia de terapia previa aumenta la probabilidad de recibir terapia adyuvante.
+
+Por otro lado, las variables "Unidades_transfundidas" y "PSA_preoperatorio", aunque muestran una correlación en los modelos, no alcanzan significancia estadística en la mayoría de las pruebas (p \> 0.05 en la mayoría) en estos análisis. La variable "Raza_afroamericana" no resulta significativa en el modelo stepwise, evidenciando que su impacto no es claro en este contexto.
+
+El ajuste del modelo, medido por el deviance residual y el AIC, indica que el modelo con "Terapia_previa", junto con las otras variables, tiene un mejor ajuste en comparación con un modelo nulo, particularmente reflejado en la reducción del deviance.
+
+En conclusión, la variable más relevante para predecir la terapia adyuvante en este análisis es la terapia previa, mientras que las demás variables no presentan significancia estadística fuerte en estos modelos. Esto sugiere que la historia previa de terapia tiene un impacto importante en la probabilidad de recibir terapia adyuvante en pacientes con las características estudiadas.
+
+### 2.7 Modelo final
+
+Con base en los resultados de ajuste (AIC) y la evaluación de colinealidad (VIF), se concluye que el modelo óptimo es el obtenido mediante las técnicas de eliminación hacia atrás (backward elimination) o selección paso a paso (stepwise selection), dado que ambos produjeron exactamente el mismo conjunto de variables.
+
+El modelo final incluye un total de cuatro variables independientes, entre ellas la más resaltante que es la variable "Terapia previa", las cuales serán reportadas en el análisis multivariado definitivo.
+
+## 3 Reporte del análisis univariado y multivariado
+
+Como en las sesiones anteriores, reportaremos los resultados del modelo final de regresión logística.
+
+Tabla para los resultados de la regresión univariado (no ajustado)
+
+```{r}
+tabla_univ <- almac_sangre_1 |>
+  tbl_uvregression(
+    include = c(Unidades_transfundidas, Raza_afroamericana, Terapia_previa, Edad, Edad_mediana_GR,
+                Volumen_prostata, PSA_preoperatorio),
+    y = Terapia_adyuvante,
+    method = glm,
+    method.args = list(family = binomial),
+    exponentiate = TRUE,
+    conf.int = TRUE,
+    hide_n = TRUE,
+    add_estimate_to_reference_rows = FALSE,
+    pvalue_fun = ~ style_pvalue(.x, digits = 3),
+    estimate_fun = ~ style_number(.x, digits = 2),
+    label = list(
+      Unidades_transfundidas ~ "Unidades Transfundidas",
+      Raza_afroamericana ~ "Raza afroamericana",
+      Terapia_previa ~ "Terapia previa",
+      Edad ~ "Edad",
+      Edad_mediana_GR ~ "Edad mediana de GR",
+      Volumen_prostata ~ "Volumen prostata",
+      PSA_preoperatorio ~ "PSA preoperatorio"
+    )
+  ) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(estimate = "**OR**", p.value = "**Valor P**")
+```
+
+Tabla para los resultados de la regresión multivariable (ajustado)
+
+```{r}
+tabla_multi <- glm(
+  Terapia_adyuvante ~ Unidades_transfundidas + Terapia_previa + Volumen_prostata + PSA_preoperatorio,
+  family = binomial(link = "logit"),
+  data = almac_sangre_1
+) |>
+  tbl_regression(
+    exponentiate = TRUE,
+    conf.int = TRUE,
+    pvalue_fun = ~ style_pvalue(.x, digits = 3),
+    estimate_fun = ~ style_number(.x, digits = 2),
+    label = list(
+      Unidades_transfundidas ~ "Unidades transfundidas",
+      Terapia_previa ~ "Terapia previa",
+      Volumen_prostata ~ "Volumen prostata",
+      PSA_preoperatorio ~ "PSA preoperatorio"
+    )
+  ) |>
+  bold_labels() |>
+  bold_p(t = 0.05) |>
+  modify_header(estimate = "**OR**", p.value = "**Valor P**")
+```
+
+La tabla final la construimos usando la función `tbl_merge()`. De modo que la tabla del análisis univariado o no ajustado y multivariado o ajustado, se muestren lado a lado.
+
+```{r}
+tabla_final <- 
+  tbl_merge(
+    list(tabla_univ, tabla_multi),
+    tab_spanner = c("**Univariado**", "**Multivariado**")
+  )
+```
+
+```{r}
+tabla_final
+```
+
+### **3.1 ¿Cómo interpretar?**
+
+En el análisis de regresión logística tanto en el modelo univariado como en el multivariado, se observan diferentes asociaciones entre las variables estudiadas y la probabilidad de recibir terapia adyuvante.
+
+La variable "Terapia previa" muestra una asociación estadísticamente significativa en el análisis univariado, donde los pacientes con terapia previa tienen aproximadamente 10 veces más probabilidades de recibir terapia adyuvante en comparación con aquellos sin terapia previa (OR = 9.98; IC 95%: 2.11–52.55; p = 0.003). Sin embargo, en el análisis multivariado, esta asociación disminuye y pierde significancia estadística, presentando un OR de 5.04 (IC 95%: 0.79–31.83; p = 0.076), lo que indica que al ajustar por otras variables, la relación no es estadísticamente significativa, aunque aún sugiere una tendencia hacia mayor probabilidad de terapia adyuvante en pacientes con terapia previa.
+
+La variable "Unidades transfundidas" no mostró asociación significativa con la probabilidad de recibir terapia adyuvante en ninguno de los análisis (p \> 0.05).
+
+Por otro lado, variables como "Raza afroamericana", "Edad", "Edad mediana de GR", "Volumen de próstata" y "PSA preoperatorio" tampoco se asociaron de manera estadísticamente significativa con la probabilidad de recibir terapia adyuvante en los modelos ajustados, aunque en algunos casos como el PSA preoperatorio en el análisis univariado, la relación fue significativa (OR = 1.09; IC 95%: 1.00–1.17; p = 0.019), sugiriendo que incrementos en el PSA previo al tratamiento pueden estar relacionados con mayor probabilidad de recibir terapia adyuvante, pero esta asociación no se mantiene en el análisis multivariado.
+
+En resumen, la evidencia más fuerte en estos datos indica que la presencia de terapia previa está relacionada con una mayor probabilidad de recibir terapia adyuvante, aunque esta relación no alcanza significancia estadística en el análisis ajustado, y otras variables como edad, raza, volumen prostático y unidades transfundidas no mostraron asociación significativa tras el ajuste.
